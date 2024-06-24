@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition</title>
+</head>
+<body>
+    <h1>Face Recognition</h1>
+    <video id="videoElement" width="640" height="480" autoplay></video>
+    <canvas id="canvasElement" width="640" height="480"></canvas>
+    
+    <script>
+        const video = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvasElement');
+        const ctx = canvas.getContext('2d');
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                video.srcObject = stream;
+            })
+            .catch(function(error) {
+                console.log("Error accessing camera: " + error);
+            });
+
+        video.addEventListener('play', function() {
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            setInterval(function() {
+                ctx.drawImage(video, 0, 0, width, height);
+                canvas.toBlob(function(blob) {
+                    const formData = new FormData();
+                    formData.append('image', blob, 'image.jpg');
+                    fetch('/recognize', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const imgUrl = URL.createObjectURL(blob);
+                        const img = new Image();
+                        img.onload = function() {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0, width, height);
+                        };
+                        img.src = imgUrl;
+                    })
+                    .catch(error => console.error('Error sending image: ', error));
+                }, 'image/jpeg');
+            }, 1000);  // Adjust interval as needed
+        });
+    </script>
+</body>
+</html>
