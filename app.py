@@ -32,7 +32,6 @@ EYE_AR_CONSEC_FRAMES = 3
 COUNTER = 0
 TOTAL = 0
 match_found = False
-unmatch_image_taken = False
 
 # Initialize dlib's face detector (HOG-based) and then create the facial landmark predictor
 detector = dlib.get_frontal_face_detector()
@@ -56,6 +55,10 @@ def eye_aspect_ratio(eye):
     # return the eye aspect ratio
     return ear
 
+# Start time to handle timeout for unmatch status
+start_time = time.time()
+max_time = 60  # Maximum time in seconds to wait for a match
+
 # Main loop to capture video and process instructions
 while True:
     ret, frame = video_capture.read()
@@ -71,56 +74,54 @@ while True:
         shape = predictor(gray, rect)
         shape = face_recognition.face_landmarks(rgb_frame)
 
-        # Extract the left and right eye coordinates, then use the coordinates to compute the eye aspect ratio for both eyes
-        leftEye = shape[0]['left_eye']
-        rightEye = shape[0]['right_eye']
-        leftEAR = eye_aspect_ratio(leftEye)
-        rightEAR = eye_aspect_ratio(rightEye)
+        if shape:
+            # Extract the left and right eye coordinates, then use the coordinates to compute the eye aspect ratio for both eyes
+            leftEye = shape[0]['left_eye']
+            rightEye = shape[0]['right_eye']
+            leftEAR = eye_aspect_ratio(leftEye)
+            rightEAR = eye_aspect_ratio(rightEye)
 
-        # Average the eye aspect ratio together for both eyes
-        ear = (leftEAR + rightEAR) / 2.0
+            # Average the eye aspect ratio together for both eyes
+            ear = (leftEAR + rightEAR) / 2.0
 
-        # Check to see if the eye aspect ratio is below the blink threshold, and if so, increment the blink frame counter
-        if ear < EYE_AR_THRESH:
-            COUNTER += 1
-        else:
-            # If the eyes were closed for a sufficient number of frames, then increment the total number of blinks
-            if COUNTER >= EYE_AR_CONSEC_FRAMES:
-                TOTAL += 1
+            # Check to see if the eye aspect ratio is below the blink threshold, and if so, increment the blink frame counter
+            if ear < EYE_AR_THRESH:
+                COUNTER += 1
+            else:
+                # If the eyes were closed for a sufficient number of frames, then increment the total number of blinks
+                if COUNTER >= EYE_AR_CONSEC_FRAMES:
+                    TOTAL += 1
 
-            # Reset the eye frame counter
-            COUNTER = 0
+                # Reset the eye frame counter
+                COUNTER = 0
 
-        # Draw the total number of blinks on the frame along with the computed eye aspect ratio for the frame
-        cv2.putText(frame, "Blinks: {}".format(TOTAL), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            # Draw the total number of blinks on the frame along with the computed eye aspect ratio for the frame
+            cv2.putText(frame, "Blinks: {}".format(TOTAL), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        face_landmarks_list = face_recognition.face_landmarks(rgb_frame)
+            face_landmarks_list = face_recognition.face_landmarks(rgb_frame)
 
-        if face_landmarks_list:
-            # Check if face matches reference image
-            face_encoding = face_recognition.face_encodings(rgb_frame)
-            if len(face_encoding) > 0:
-                match = face_recognition.compare_faces([reference_face_encoding], face_encoding[0])
-                if match[0] and TOTAL >= 1:  # Ensure at least one blink detected
-                    match_found = True
-                    cv2.putText(frame, "Match Found!", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    capture_image(frame, "match")
-                    print("Match found with reference image!")
-                    break
-                else:
-                    match_found = False
-                    cv2.putText(frame, "Unmatch", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    if not unmatch_image_taken:
-                        time.sleep(15)  # Wait for 15 seconds before taking the unmatch screenshot
-                        capture_image(frame, "unmatch")
-                        unmatch_image_taken = True
+            if face_landmarks_list:
+                # Check if face matches reference image
+                face_encoding = face_recognition.face_encodings(rgb_frame)
+                if len(face_encoding) > 0:
+                    match = face_recognition.compare_faces([reference_face_encoding], face_encoding[0])
+                    if match[0] and TOTAL >= 1:  # Ensure at least one blink detected
+                        match_found = True
+                        cv2.putText(frame, "Match Found!", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        capture_image(frame, "match")
+                        print("Match found with reference image!")
                         break
 
-    if match_found or unmatch_image_taken:
+    cv2.imshow('Video', frame)
+
+    if match_found:
         break
 
-    cv2.imshow('Video', frame)
+    if time.time() - start_time > max_time:
+        capture_image(frame, "unmatch")
+        print("Unmatch status: No match found within the time limit.")
+        break
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
