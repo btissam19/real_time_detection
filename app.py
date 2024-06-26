@@ -57,7 +57,7 @@ def eye_aspect_ratio(eye):
 
 # Start time to handle timeout for unmatch status
 start_time = time.time()
-max_time = 60  # Maximum time in seconds to wait for a match
+max_time = 40  # Maximum time in seconds to wait for a match
 
 # Main loop to capture video and process instructions
 while True:
